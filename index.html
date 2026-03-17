@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eleccions ICGSB – Generador de paperetes</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 480px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #1a1a1a;
+    }
+    h1 { font-size: 1.35rem; margin-bottom: 0.5rem; }
+    p { color: #555; font-size: 0.95rem; margin-bottom: 1.5rem; }
+    .form-group { margin-bottom: 1.25rem; }
+    label { display: block; font-weight: 600; margin-bottom: 0.35rem; }
+    input[type="file"] {
+      width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 6px;
+      background: #fff; font-size: 0.95rem;
+    }
+    button {
+      width: 100%; padding: 0.75rem 1rem; font-size: 1rem; font-weight: 600;
+      color: #fff; background: #0d6efd; border: none; border-radius: 6px; cursor: pointer;
+    }
+    button:hover { background: #0b5ed7; }
+    button:disabled { background: #6c757d; cursor: not-allowed; }
+    .error, .success { margin-top: 1rem; padding: 0.75rem; border-radius: 6px; font-size: 0.9rem; }
+    .error { background: #f8d7da; color: #721c24; }
+    .success { background: #d1e7dd; color: #0f5132; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Eleccions ICGSB</h1>
+  <p>Puja l'exportació Excel de vots. El PDF es genera al navegador (cap servidor).</p>
+
+  <form id="form" enctype="multipart/form-data">
+    <div class="form-group">
+      <label for="excel">Fitxer Excel (.xlsx)</label>
+      <input type="file" id="excel" name="excel" accept=".xlsx" required>
+    </div>
+    <div class="form-group">
+      <button type="submit" id="btn">Generar PDF</button>
+    </div>
+  </form>
+
+  <div id="message" role="alert" class="hidden"></div>
+
+  <script>
+(function() {
+  'use strict';
+
+  function norm(s) {
+    return String(s || '').toUpperCase().replace(/\s/g, '').replace(/_/g, '');
+  }
+
+  function detectColumns(headers) {
+    const normMap = {};
+    headers.forEach((h, i) => { normMap[norm(h)] = i; });
+    const find = (...candidates) => {
+      for (const c of candidates) {
+        const k = norm(c);
+        if (normMap[k] !== undefined) return normMap[k];
+      }
+      return -1;
+    };
+    const idxIdAgenda = find('Id agenda', 'ID agenda', 'id agenda', 'IDAGENDA', 'id_agenda');
+    const idxNomAgenda = find('Nombre agenda', 'nombre agenda', 'NOMBREAGENDA', 'nombre_agenda');
+    const idxId = find('ID', 'Id', 'id');
+    const idxVots = find('VOTO', 'VOTOS', 'Voto', 'votos');
+    if (idxId < 0 || idxVots < 0) return null;
+    if (idxIdAgenda < 0 || idxNomAgenda < 0) {
+      return { idxIdAgenda: -1, idxNomAgenda: -1, idxId, idxVots, fallback: true };
+    }
+    return { idxIdAgenda, idxNomAgenda, idxId, idxVots, fallback: false };
+  }
+
+  function parseExcel(ab) {
+    const wb = XLSX.read(ab, { type: 'array' });
+    const sheetNames = wb.SheetNames;
+    let cols = null;
+    let rows = null;
+
+    for (const name of sheetNames) {
+      const sheet = wb.Sheets[name];
+      const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      if (!data.length) continue;
+      const headers = data[0].map(h => (h != null ? String(h).trim() : ''));
+      const c = detectColumns(headers);
+      if (c) {
+        cols = c;
+        rows = data;
+        if (!c.fallback) break;
+      }
+    }
+
+    if (!rows || !cols) return null;
+    const LINE_OFFSET = 2;
+    const groupMap = {};
+    const agendaOrder = {};
+
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      const idAgenda = cols.fallback ? '\u2014' : (row[cols.idxIdAgenda] != null ? String(row[cols.idxIdAgenda]).trim() : '');
+      const nomAgenda = cols.fallback ? '\u2014' : (row[cols.idxNomAgenda] != null ? String(row[cols.idxNomAgenda]).trim() : '');
+      const idVotant = row[cols.idxId] != null ? String(row[cols.idxId]).trim() : '';
+      const vot = row[cols.idxVots] != null ? String(row[cols.idxVots]).trim() : '';
+      if (!idVotant) continue;
+
+      const key = idAgenda + '|' + idVotant;
+      if (!agendaOrder[idAgenda]) agendaOrder[idAgenda] = { next: 1, voters: {} };
+      if (agendaOrder[idAgenda].voters[idVotant] == null) {
+        agendaOrder[idAgenda].voters[idVotant] = agendaOrder[idAgenda].next++;
+      }
+      const ordinal = agendaOrder[idAgenda].voters[idVotant];
+      const totalAgenda = Object.keys(agendaOrder[idAgenda].voters).length;
+
+      if (!groupMap[key]) {
+        groupMap[key] = {
+          idAgenda,
+          nomAgenda,
+          idVotant,
+          ordinal,
+          total: totalAgenda,
+          lines: [],
+          votes: []
+        };
+      }
+      groupMap[key].lines.push(r + LINE_OFFSET);
+      if (vot) groupMap[key].votes.push(vot);
+    }
+
+    const result = [];
+    for (const k of Object.keys(groupMap)) {
+      const g = groupMap[k];
+      g.total = agendaOrder[g.idAgenda] ? Object.keys(agendaOrder[g.idAgenda].voters).length : g.lines.length;
+      g.votes = [...new Set(g.votes)].sort();
+      result.push(g);
+    }
+    result.sort((a, b) => {
+      if (a.idAgenda !== b.idAgenda) return String(a.idAgenda).localeCompare(String(b.idAgenda));
+      return a.ordinal - b.ordinal;
+    });
+    return result;
+  }
+
+  function generatePDF(ballots) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const A4_W = 210;
+    const A4_H = 297;
+    const MARGIN = 15;
+    const COLS = 2;
+    const ROWS = 3;
+    const CARD_W = (A4_W - 2 * MARGIN) / COLS;
+    const CARD_H = (A4_H - 2 * MARGIN) / ROWS;
+    const INNER = 3;
+    const SLOT = COLS * ROWS;
+
+    let posInPage = 0;
+    let lastIdAgenda = null;
+
+    for (const b of ballots) {
+      if (lastIdAgenda !== null && b.idAgenda !== lastIdAgenda) {
+        doc.addPage();
+        posInPage = 0;
+      }
+      lastIdAgenda = b.idAgenda;
+
+      if (posInPage >= SLOT) {
+        doc.addPage();
+        posInPage = 0;
+      }
+
+      const col = posInPage % COLS;
+      const row = ROWS - 1 - Math.floor(posInPage / COLS);
+      const x0 = MARGIN + col * CARD_W;
+      const y0 = MARGIN + row * CARD_H;
+      const bx = x0 + INNER;
+      const by = y0 + INNER;
+      const bw = CARD_W - 2 * INNER;
+      const bh = CARD_H - 2 * INNER;
+
+      doc.setFillColor(245, 240, 224);
+      doc.rect(bx, by, bw, bh, 'F');
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.5);
+      doc.rect(bx, by, bw, bh, 'S');
+
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'bold');
+      doc.text('ELECCIONS ICGSB', bx + 4, by + bh - 6);
+      doc.setFontSize(9);
+      doc.text('VOT ELECTR\u00d2NIC', bx + 4, by + bh - 10);
+
+      let y = by + bh - 20;
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(8);
+      const nomParts = String(b.nomAgenda).split('//');
+      for (let i = 0; i < nomParts.length; i++) {
+        const t = nomParts[i].trim();
+        if (t) doc.text(t, bx + 4, y);
+        if (i < nomParts.length - 1) y -= 4;
+      }
+      y -= 4;
+      doc.text('Identificador votant: ' + b.idVotant, bx + 4, y);
+      y -= 6;
+
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(9);
+      doc.text('Vot em\u00e8s:', bx + 4, y);
+      y -= 4;
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(8);
+      if (!b.votes.length) {
+        doc.text('\u2014 Sense vot registrat \u2014', bx + 8, y);
+        y -= 4;
+      } else {
+        for (const v of b.votes) {
+          if (y < by + 10) break;
+          doc.text('- ' + v, bx + 8, y);
+          y -= 3.5;
+        }
+      }
+
+      doc.setFontSize(7);
+      doc.setFont(undefined, 'italic');
+      doc.text('ID AGENDA: ' + b.idAgenda + ' - Papeleta: ' + b.ordinal + '/' + b.total, bx + 4, by + 5);
+      doc.text('L\u00ednies Excel: ' + b.lines.join(','), bx + 4, by + 2.5);
+
+      posInPage++;
+    }
+
+    return doc.output('blob');
+  }
+
+  const form = document.getElementById('form');
+  const input = document.getElementById('excel');
+  const btn = document.getElementById('btn');
+  const message = document.getElementById('message');
+
+  function showMessage(text, isError) {
+    message.textContent = text;
+    message.className = isError ? 'error' : 'success';
+    message.classList.remove('hidden');
+  }
+  function hideMessage() { message.classList.add('hidden'); }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const file = input.files[0];
+    if (!file) return;
+    hideMessage();
+    btn.disabled = true;
+    btn.textContent = 'Generant...';
+
+    try {
+      const ab = await file.arrayBuffer();
+      const ballots = parseExcel(ab);
+      if (!ballots || ballots.length === 0) {
+        showMessage('No s\'han trobat dades valides a l\'Excel.', true);
+        return;
+      }
+      const blob = generatePDF(ballots);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'paperetes_icgsb.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+      showMessage('PDF generat correctament (' + ballots.length + ' paperetes).', false);
+    } catch (err) {
+      showMessage('Error: ' + err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Generar PDF';
+    }
+  });
+})();
+  </script>
+</body>
+</html>

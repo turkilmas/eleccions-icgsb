@@ -46,13 +46,13 @@ Permet pujar l’Excel des del navegador i escollir les columnes abans de genera
 
 ## Cloudflare Pages (tot al navegador)
 
-La carpeta `public` conté una pàgina que **no necessita servidor**: l’Excel es llegeix i el PDF es genera a la memòria del navegador (SheetJS + jsPDF).
+La pàgina **no necessita servidor**: l’Excel es llegeix i el PDF es genera al navegador (SheetJS + jsPDF).
 
 Per desplegar a [Cloudflare Pages](https://pages.cloudflare.com/):
 
 | Camp | Valor |
 |------|--------|
 | **Comanda de compilació** | *(deixar buit)* |
-| **Directori de sortida** | `public` |
+| **Directori de sortida** | `.` *(punt = arrel del repositori)* |
 
-Enllaça el repositori; el directori arrel del projecte és correcte. Un cop desplegat, el botó «Generar PDF» funciona directament (tot s’executa al navegador).
+La pàgina que es desplega és `index.html` a l’arrel del projecte. Un cop desplegat, el botó «Generar PDF» funciona directament (tot s’executa al navegador).
