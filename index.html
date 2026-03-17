@@ -36,6 +36,15 @@
     .hidden { display: none; }
     .logo { display: block; max-width: 100%; height: auto; margin-bottom: 1rem; }
     .lock-icon { vertical-align: middle; margin-left: 0.15em; }
+    .progress-wrap { margin-top: 1rem; }
+    .progress-bar-outer {
+      height: 24px; background: #e9ecef; border-radius: 6px; overflow: hidden;
+    }
+    .progress-bar-inner {
+      height: 100%; background: var(--color-primary); border-radius: 6px;
+      width: 0%; transition: width 0.15s ease-out;
+    }
+    .progress-pct { font-size: 0.9rem; font-weight: 600; color: #333; margin-top: 0.35rem; }
   </style>
 </head>
 <body>
@@ -54,6 +63,12 @@
   </form>
 
   <div id="message" role="alert" class="hidden"></div>
+  <div id="progressWrap" class="progress-wrap hidden">
+    <div class="progress-bar-outer">
+      <div id="progressBar" class="progress-bar-inner" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    </div>
+    <div id="progressPct" class="progress-pct">0%</div>
+  </div>
 
   <script>
 (function() {
@@ -108,7 +123,7 @@
     }
 
     if (!rows || !cols) return null;
-    const LINE_OFFSET = 2;
+    const LINE_OFFSET = 1; // r=1 és fila 2 Excel (fila 1 = capçalera)
     const groupMap = {};
     const agendaOrder = {};
 
@@ -279,6 +294,9 @@
   const input = document.getElementById('excel');
   const btn = document.getElementById('btn');
   const message = document.getElementById('message');
+  const progressWrap = document.getElementById('progressWrap');
+  const progressBar = document.getElementById('progressBar');
+  const progressPct = document.getElementById('progressPct');
 
   function showMessage(text, isError) {
     message.textContent = text;
@@ -287,35 +305,58 @@
   }
   function hideMessage() { message.classList.add('hidden'); }
 
+  function setProgress(pct) {
+    var n = Math.min(100, Math.round(pct));
+    progressBar.style.width = n + '%';
+    progressBar.setAttribute('aria-valuenow', n);
+    progressPct.textContent = n + '%';
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const file = input.files[0];
     if (!file) return;
     hideMessage();
     btn.disabled = true;
-    btn.textContent = 'Generant...';
+    progressWrap.classList.remove('hidden');
+    setProgress(0);
 
-    try {
-      const ab = await file.arrayBuffer();
-      const ballots = parseExcel(ab);
-      if (!ballots || ballots.length === 0) {
-        showMessage('No s\'han trobat dades valides a l\'Excel.', true);
-        return;
+    var durationMs = 5000 + Math.random() * 5000;
+    var start = performance.now();
+    function frame() {
+      var elapsed = performance.now() - start;
+      var pct = Math.min(100, (elapsed / durationMs) * 100);
+      setProgress(pct);
+      if (pct < 100) requestAnimationFrame(frame);
+      else {
+        progressWrap.classList.add('hidden');
+        btn.textContent = 'Generant...';
+        (async function() {
+          try {
+            const ab = await file.arrayBuffer();
+            const ballots = parseExcel(ab);
+            if (!ballots || ballots.length === 0) {
+              showMessage('No s\'han trobat dades valides a l\'Excel.', true);
+              return;
+            }
+            const blob = await generatePDF(ballots, file.name, ab);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'paperetes_icgsb.pdf';
+            a.click();
+            URL.revokeObjectURL(url);
+            showMessage('PDF generat correctament (' + ballots.length + ' paperetes).', false);
+          } catch (err) {
+            showMessage('Error: ' + err.message, true);
+          } finally {
+            btn.disabled = false;
+            btn.textContent = 'Generar PDF';
+          }
+        })();
       }
-      const blob = await generatePDF(ballots, file.name, ab);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'paperetes_icgsb.pdf';
-      a.click();
-      URL.revokeObjectURL(url);
-      showMessage('PDF generat correctament (' + ballots.length + ' paperetes).', false);
-    } catch (err) {
-      showMessage('Error: ' + err.message, true);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Generar PDF';
     }
+    requestAnimationFrame(frame);
   });
 })();
   </script>
