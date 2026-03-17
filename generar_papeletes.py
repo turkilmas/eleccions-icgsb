@@ -1,5 +1,7 @@
+import hashlib
 import io
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Union
 
@@ -174,6 +176,56 @@ def agrupar_per_papeletes(
     return resultats
 
 
+def _comptar_pagines(papeletes: list) -> int:
+    """Retorna el nombre total de pàgines que ocuparan les paperetes."""
+    if not papeletes:
+        return 1
+    n = 1
+    pos = 0
+    cols, files = 2, 3
+    slot = cols * files
+    id_agenda_ant = None
+    for t in papeletes:
+        id_agenda = t[0]
+        if id_agenda_ant is not None and id_agenda != id_agenda_ant:
+            n += 1
+            pos = 0
+        id_agenda_ant = id_agenda
+        if pos >= slot:
+            n += 1
+            pos = 0
+        pos += 1
+    return n
+
+
+def _dibuixar_capcalera(
+    c: canvas.Canvas, ample: float, alt: float, nom_fitxer: str, hash_fitxer: str
+) -> None:
+    """Dibuixa la capçalera (dalt) a la pàgina actual."""
+    marge = 15 * mm
+    c.setFillColorRGB(0.3, 0.3, 0.3)
+    c.setFont("Helvetica", 7)
+    c.drawString(marge, alt - 5 * mm, nom_fitxer)
+    c.drawString(marge, alt - 9 * mm, hash_fitxer)
+
+
+def _dibuixar_peu(
+    c: canvas.Canvas,
+    ample: float,
+    alt: float,
+    data_hora: str,
+    num_pag: int,
+    total_pag: int,
+) -> None:
+    """Dibuixa el peu (baix) a la pàgina actual."""
+    marge = 15 * mm
+    c.setFillColorRGB(0.3, 0.3, 0.3)
+    c.setFont("Helvetica", 7)
+    c.drawString(marge, 6 * mm, data_hora)
+    c.drawCentredString(ample / 2, 6 * mm, "eleccions-icgsb.ambia.es")
+    c.drawRightString(ample - marge, 6 * mm, f"{num_pag}/{total_pag}")
+
+
 def crear_pdf_papeletes(
     df: pd.DataFrame,
     sortida: Union[Path, io.BytesIO],
@@ -181,28 +233,36 @@ def crear_pdf_papeletes(
     col_nom_agenda: str,
     col_id_votant: str,
     col_vots: str,
+    nom_fitxer: Optional[str] = None,
+    hash_fitxer: Optional[str] = None,
 ) -> Optional[bytes]:
     dest = sortida if isinstance(sortida, io.BytesIO) else str(sortida)
     c = canvas.Canvas(dest, pagesize=A4)
     ample, alt = A4
 
     marge_x = 15 * mm
-    marge_y = 15 * mm
+    marge_y = 12 * mm
+    marge_superior = 14 * mm
 
     # 6 paperetes per pàgina: 2 columnes x 3 files
     cols = 2
     files = 3
     usable_w = ample - 2 * marge_x
-    usable_h = alt - 2 * marge_y
+    usable_h = alt - marge_y - marge_superior
     card_w = usable_w / cols
     card_h = usable_h / files
 
     papeletes = agrupar_per_papeletes(
         df, col_id_agenda, col_nom_agenda, col_id_votant, col_vots
     )
+    total_pagines = _comptar_pagines(papeletes)
+    data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    nom_fitxer = nom_fitxer or "—"
+    hash_fitxer = hash_fitxer or "—"
 
     pos_en_pagina = 0
     id_agenda_anterior = None
+    num_pagina = 1
 
     for (
         id_agenda,
@@ -215,14 +275,21 @@ def crear_pdf_papeletes(
     ) in papeletes:
         # Canvi d’elecció (id agenda) → nova pàgina
         if id_agenda_anterior is not None and id_agenda != id_agenda_anterior:
+            _dibuixar_peu(c, ample, alt, data_hora, num_pagina, total_pagines)
             c.showPage()
             pos_en_pagina = 0
+            num_pagina += 1
         id_agenda_anterior = id_agenda
 
         # 6 paperetes per pàgina → canvi de pàgina
         if pos_en_pagina >= cols * files:
+            _dibuixar_peu(c, ample, alt, data_hora, num_pagina, total_pagines)
             c.showPage()
             pos_en_pagina = 0
+            num_pagina += 1
+
+        if pos_en_pagina == 0:
+            _dibuixar_capcalera(c, ample, alt, nom_fitxer, hash_fitxer)
 
         pos = pos_en_pagina % (cols * files)
         fila = files - 1 - (pos // cols)  # de dalt cap a baix
@@ -296,6 +363,7 @@ def crear_pdf_papeletes(
 
         pos_en_pagina += 1
 
+    _dibuixar_peu(c, ample, alt, data_hora, num_pagina, total_pagines)
     c.save()
     if isinstance(sortida, io.BytesIO):
         sortida.seek(0)
@@ -303,15 +371,23 @@ def crear_pdf_papeletes(
     return None
 
 
-def generar_pdf_des_de_excel(excel_source: Union[Path, io.BytesIO]) -> bytes:
+def generar_pdf_des_de_excel(
+    excel_source: Union[Path, io.BytesIO],
+    nom_fitxer: Optional[str] = None,
+) -> bytes:
     """
     Llegeix l'Excel des d'un fitxer o un stream i retorna el PDF de paperetes en bytes.
     Útil per a la pàgina web (upload).
     """
     if isinstance(excel_source, (Path, str)):
-        xl = pd.ExcelFile(Path(excel_source))
+        path = Path(excel_source)
+        xl = pd.ExcelFile(path)
+        nom_fitxer = nom_fitxer or path.name
+        excel_bytes = path.read_bytes()
     else:
-        xl = pd.ExcelFile(excel_source)
+        excel_bytes = excel_source.getvalue()
+        xl = pd.ExcelFile(io.BytesIO(excel_bytes))
+        nom_fitxer = nom_fitxer or "—"
 
     df = None
     for nom_full in xl.sheet_names:
@@ -342,6 +418,7 @@ def generar_pdf_des_de_excel(excel_source: Union[Path, io.BytesIO]) -> bytes:
             df[col_nom_agenda] = "—"
 
     df_proc = calcular_orden_votants_per_agenda(df, col_id_agenda, col_id_votant)
+    hash_fitxer = hashlib.sha256(excel_bytes).hexdigest()
     buffer = io.BytesIO()
     crear_pdf_papeletes(
         df_proc,
@@ -350,6 +427,8 @@ def generar_pdf_des_de_excel(excel_source: Union[Path, io.BytesIO]) -> bytes:
         col_nom_agenda=col_nom_agenda,
         col_id_votant=col_id_votant,
         col_vots=col_vots,
+        nom_fitxer=nom_fitxer,
+        hash_fitxer=hash_fitxer,
     )
     return buffer.getvalue()
 
@@ -410,6 +489,7 @@ def main() -> None:
     df_proc = calcular_orden_votants_per_agenda(df, col_id_agenda, col_id_votant)
 
     sortida = excel_path.parent / "paperetes_icgsb.pdf"
+    hash_fitxer = hashlib.sha256(excel_path.read_bytes()).hexdigest()
     crear_pdf_papeletes(
         df_proc,
         sortida,
@@ -417,6 +497,8 @@ def main() -> None:
         col_nom_agenda=col_nom_agenda,
         col_id_votant=col_id_votant,
         col_vots=col_vots,
+        nom_fitxer=excel_path.name,
+        hash_fitxer=hash_fitxer,
     )
     print(f"PDF generat a: {sortida}")
 

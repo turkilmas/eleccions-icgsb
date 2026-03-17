@@ -27,7 +27,10 @@ def generar():
     if not fitxer.filename.lower().endswith((".xlsx", ".xls")):
         return "El fitxer ha de ser Excel (.xlsx).", 400
     try:
-        pdf_bytes = generar_pdf_des_de_excel(io.BytesIO(fitxer.read()))
+        excel_bytes = fitxer.read()
+        pdf_bytes = generar_pdf_des_de_excel(
+            io.BytesIO(excel_bytes), nom_fitxer=fitxer.filename
+        )
     except Exception as e:
         return str(e), 500
     return send_file(

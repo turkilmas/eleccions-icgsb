@@ -35,12 +35,13 @@
     .success { background: #d1e7dd; color: #0f5132; }
     .hidden { display: none; }
     .logo { display: block; max-width: 100%; height: auto; margin-bottom: 1rem; }
+    .lock-icon { vertical-align: middle; margin-left: 0.15em; }
   </style>
 </head>
 <body>
   <img class="logo" src="https://www.graduados-sociales.com/images/assets/logo-es100.svg" alt="Graduats Socials" width="280">
   <h1>Eleccions ICGSB</h1>
-  <p>Puja l'exportació Excel de vots. El PDF es genera al navegador (cap servidor).</p>
+  <p>Puja l'exportació Excel de vots. El PDF es genera al navegador en un entorn segur SSL <span class="lock-icon" aria-hidden="true">🔒</span> (sense cap còpia al servidor).</p>
 
   <form id="form" enctype="multipart/form-data">
     <div class="form-group">
@@ -156,18 +157,30 @@
     return result;
   }
 
-  function generatePDF(ballots) {
+  async function sha256Hex(buffer) {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    return Array.from(new Uint8Array(hashBuffer)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+  }
+
+  async function generatePDF(ballots, fileName, arrayBuffer) {
     const { jsPDF } = window.jspdf;
+    const fileHash = await sha256Hex(arrayBuffer);
+    const genDate = new Date();
+    const dateStr = genDate.toLocaleString('ca-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const A4_W = 210;
     const A4_H = 297;
     const MARGIN = 15;
+    const HEADER_H = 12;
+    const FOOTER_H = 12;
     const COLS = 2;
     const ROWS = 3;
     const CARD_W = (A4_W - 2 * MARGIN) / COLS;
-    const CARD_H = (A4_H - 2 * MARGIN) / ROWS;
+    const CARD_H = (A4_H - HEADER_H - FOOTER_H - 2 * MARGIN) / ROWS;
     const INNER = 3;
     const SLOT = COLS * ROWS;
+    const MARGIN_TOP = HEADER_H + MARGIN;
 
     let posInPage = 0;
     let lastIdAgenda = null;
@@ -185,9 +198,9 @@
       }
 
       const col = posInPage % COLS;
-      const row = ROWS - 1 - Math.floor(posInPage / COLS);
+      const row = Math.floor(posInPage / COLS);
       const x0 = MARGIN + col * CARD_W;
-      const y0 = MARGIN + row * CARD_H;
+      const y0 = MARGIN_TOP + row * CARD_H;
       const bx = x0 + INNER;
       const by = y0 + INNER;
       const bw = CARD_W - 2 * INNER;
@@ -245,6 +258,20 @@
       posInPage++;
     }
 
+    var totalPages = doc.getNumberOfPages();
+    doc.setFontSize(7);
+    doc.setFont(undefined, 'normal');
+    for (var p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setTextColor(80, 80, 80);
+      doc.text(fileName || '—', MARGIN, 6);
+      doc.text(fileHash, MARGIN, 10);
+      doc.setTextColor(80, 80, 80);
+      doc.text(dateStr, MARGIN, A4_H - 6);
+      doc.text('eleccions-icgsb.ambia.es', A4_W / 2, A4_H - 6, { align: 'center' });
+      doc.text(p + '/' + totalPages, A4_W - MARGIN, A4_H - 6, { align: 'right' });
+    }
+
     return doc.output('blob');
   }
 
@@ -275,7 +302,7 @@
         showMessage('No s\'han trobat dades valides a l\'Excel.', true);
         return;
       }
-      const blob = generatePDF(ballots);
+      const blob = await generatePDF(ballots, file.name, ab);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
