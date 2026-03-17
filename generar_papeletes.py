@@ -1,6 +1,7 @@
+import io
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import pandas as pd
 from reportlab.lib.pagesizes import A4
@@ -175,13 +176,14 @@ def agrupar_per_papeletes(
 
 def crear_pdf_papeletes(
     df: pd.DataFrame,
-    sortida: Path,
+    sortida: Union[Path, io.BytesIO],
     col_id_agenda: str,
     col_nom_agenda: str,
     col_id_votant: str,
     col_vots: str,
-) -> None:
-    c = canvas.Canvas(str(sortida), pagesize=A4)
+) -> Optional[bytes]:
+    dest = sortida if isinstance(sortida, io.BytesIO) else str(sortida)
+    c = canvas.Canvas(dest, pagesize=A4)
     ample, alt = A4
 
     marge_x = 15 * mm
@@ -295,6 +297,61 @@ def crear_pdf_papeletes(
         pos_en_pagina += 1
 
     c.save()
+    if isinstance(sortida, io.BytesIO):
+        sortida.seek(0)
+        return sortida.getvalue()
+    return None
+
+
+def generar_pdf_des_de_excel(excel_source: Union[Path, io.BytesIO]) -> bytes:
+    """
+    Llegeix l'Excel des d'un fitxer o un stream i retorna el PDF de paperetes en bytes.
+    Útil per a la pàgina web (upload).
+    """
+    if isinstance(excel_source, (Path, str)):
+        xl = pd.ExcelFile(Path(excel_source))
+    else:
+        xl = pd.ExcelFile(excel_source)
+
+    df = None
+    for nom_full in xl.sheet_names:
+        candidat = pd.read_excel(xl, sheet_name=nom_full, header=0)
+        candidat.columns = candidat.columns.str.strip()
+        try:
+            _detectar_columnes(candidat)
+            df = candidat
+            break
+        except KeyError:
+            continue
+    if df is None:
+        df = pd.read_excel(xl, sheet_name=0, header=0)
+        df.columns = df.columns.str.strip()
+
+    try:
+        col_id_agenda, col_nom_agenda, col_id_votant, col_vots = _detectar_columnes(df)
+    except KeyError:
+        detectat = _detectar_columnes_per_posicio(df)
+        if detectat:
+            col_id_agenda, col_nom_agenda, col_id_votant, col_vots = detectat
+        else:
+            col_id_votant = "ID"
+            col_vots = "VOTO"
+            col_id_agenda = "_AGENDA_ID"
+            col_nom_agenda = "_AGENDA_NOM"
+            df[col_id_agenda] = "—"
+            df[col_nom_agenda] = "—"
+
+    df_proc = calcular_orden_votants_per_agenda(df, col_id_agenda, col_id_votant)
+    buffer = io.BytesIO()
+    crear_pdf_papeletes(
+        df_proc,
+        buffer,
+        col_id_agenda=col_id_agenda,
+        col_nom_agenda=col_nom_agenda,
+        col_id_votant=col_id_votant,
+        col_vots=col_vots,
+    )
+    return buffer.getvalue()
 
 
 def main() -> None:

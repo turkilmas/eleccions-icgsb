@@ -27,7 +27,16 @@ El PDF es genera a la mateixa carpeta que l’Excel, amb el nom `paperetes_icgsb
 - Si el nom de l’agenda conté `//`, es mostra en diverses línies a la papereta.
 - En canviar d’**id agenda** (elecció), es comença una nova pàgina al PDF.
 
-## Opció web (Streamlit)
+## Pàgina web (Examinar + Generar PDF)
+
+```bash
+pip install flask
+python web.py
+```
+
+Obre al navegador **http://127.0.0.1:5000**. Hi ha un botó **Examinar** per triar l’Excel i **Generar PDF** per descarregar el fitxer.
+
+## Opció web amb Streamlit
 
 ```bash
 streamlit run app.py
