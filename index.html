@@ -86,17 +86,21 @@
     let cols = null;
     let rows = null;
 
+    // Preferir el full que tingui id agenda + nombre agenda (p. ex. Hoja2); si només n’hi ha amb ID i VOTO, usar el primer
+    var candidates = [];
     for (const name of sheetNames) {
       const sheet = wb.Sheets[name];
       const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
       if (!data.length) continue;
       const headers = data[0].map(h => (h != null ? String(h).trim() : ''));
       const c = detectColumns(headers);
-      if (c) {
-        cols = c;
-        rows = data;
-        if (!c.fallback) break;
-      }
+      if (c) candidates.push({ name, cols: c, rows: data });
+    }
+    if (candidates.length) {
+      var preferred = candidates.find(function (x) { return !x.cols.fallback; });
+      var chosen = preferred || candidates[0];
+      cols = chosen.cols;
+      rows = chosen.rows;
     }
 
     if (!rows || !cols) return null;
@@ -192,47 +196,48 @@
       doc.setLineWidth(0.5);
       doc.rect(bx, by, bw, bh, 'S');
 
+      // jsPDF: y creix cap avall. by = dalt de la targeta, by+bh = baix
       doc.setTextColor(0, 0, 0);
+      var topY = by + 6;
       doc.setFontSize(10);
       doc.setFont(undefined, 'bold');
-      doc.text('ELECCIONS ICGSB', bx + 4, by + bh - 6);
+      doc.text('ELECCIONS ICGSB', bx + 4, topY);
       doc.setFontSize(9);
-      doc.text('VOT ELECTR\u00d2NIC', bx + 4, by + bh - 10);
+      doc.text('VOT ELECTR\u00d2NIC', bx + 4, topY + 5);
 
-      let y = by + bh - 20;
+      var y = topY + 14;
       doc.setFont(undefined, 'normal');
       doc.setFontSize(8);
-      const nomParts = String(b.nomAgenda).split('//');
-      for (let i = 0; i < nomParts.length; i++) {
-        const t = nomParts[i].trim();
-        if (t) doc.text(t, bx + 4, y);
-        if (i < nomParts.length - 1) y -= 4;
+      var nomParts = String(b.nomAgenda).split('//');
+      for (var i = 0; i < nomParts.length; i++) {
+        var t = nomParts[i].trim();
+        if (t) { doc.text(t, bx + 4, y); y += 4; }
       }
-      y -= 4;
+      y += 2;
       doc.text('Identificador votant: ' + b.idVotant, bx + 4, y);
-      y -= 6;
+      y += 6;
 
       doc.setFont(undefined, 'bold');
       doc.setFontSize(9);
       doc.text('Vot em\u00e8s:', bx + 4, y);
-      y -= 4;
+      y += 5;
       doc.setFont(undefined, 'normal');
       doc.setFontSize(8);
       if (!b.votes.length) {
         doc.text('\u2014 Sense vot registrat \u2014', bx + 8, y);
-        y -= 4;
+        y += 5;
       } else {
-        for (const v of b.votes) {
-          if (y < by + 10) break;
-          doc.text('- ' + v, bx + 8, y);
-          y -= 3.5;
+        for (var vi = 0; vi < b.votes.length; vi++) {
+          if (y > by + bh - 18) break;
+          doc.text('- ' + b.votes[vi], bx + 8, y);
+          y += 3.5;
         }
       }
 
       doc.setFontSize(7);
       doc.setFont(undefined, 'italic');
-      doc.text('ID AGENDA: ' + b.idAgenda + ' - Papeleta: ' + b.ordinal + '/' + b.total, bx + 4, by + 5);
-      doc.text('L\u00ednies Excel: ' + b.lines.join(','), bx + 4, by + 2.5);
+      doc.text('ID AGENDA: ' + b.idAgenda + ' - Papeleta: ' + b.ordinal + '/' + b.total, bx + 4, by + bh - 7);
+      doc.text('L\u00ednies Excel: ' + b.lines.join(','), bx + 4, by + bh - 3.5);
 
       posInPage++;
     }
