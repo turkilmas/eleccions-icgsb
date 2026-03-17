@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+venv/
+.env
+
+# macOS
+.DS_Store
+
+# PDFs generats (opcional)
+# paperetes_icgsb.pdf
