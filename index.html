@@ -35,7 +35,8 @@
     .error { background: #f8d7da; color: #721c24; }
     .success { background: #d1e7dd; color: #0f5132; }
     .hidden { display: none; }
-    .logo { display: block; max-width: 100%; height: auto; margin-bottom: 1rem; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+    .logo { display: block; max-width: 100%; height: auto; margin-bottom: 0; }
     .lock-icon { vertical-align: middle; margin-left: 0.15em; }
     .progress-wrap { margin-top: 1rem; }
     .progress-bar-outer {
@@ -51,18 +52,39 @@
     .page-footer .dev-by { font-size: 0.85rem; color: #666; margin-bottom: 0.25rem; }
     .page-footer .copyright { font-size: 0.75rem; color: #888; }
     .page-footer a { text-decoration: none; color: inherit; }
-    .lang-switch { position: absolute; top: 1rem; right: 1rem; font-size: 0.9rem; }
-    .lang-switch button { background: none; border: none; cursor: pointer; padding: 0.2rem 0.4rem; color: #666; font-size: inherit; }
-    .lang-switch button:hover { color: var(--color-primary); text-decoration: underline; }
-    .lang-switch button.active { font-weight: 700; color: var(--color-primary); }
-    .lang-switch span { color: #999; margin: 0 0.15rem; }
+
+    .lang-toggle { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: #666; user-select: none; }
+    .lang-toggle .lang { font-weight: 700; color: #999; }
+    .lang-toggle[data-lang="ca"] .lang-ca { color: var(--color-primary); }
+    .lang-toggle[data-lang="es"] .lang-es { color: var(--color-primary); }
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background-color: #ced4da; transition: 0.2s; border-radius: 999px;
+    }
+    .slider:before {
+      position: absolute; content: "";
+      height: 18px; width: 18px; left: 3px; top: 3px;
+      background-color: white; transition: 0.2s; border-radius: 50%;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    }
+    .switch input:checked + .slider { background-color: var(--color-primary); }
+    .switch input:checked + .slider:before { transform: translateX(20px); }
   </style>
 </head>
 <body>
-  <div class="lang-switch" role="navigation" aria-label="Idioma">
-    <button type="button" id="langCa" data-lang="ca">CA</button><span>|</span><button type="button" id="langEs" data-lang="es">ES</button>
-  </div>
-  <img class="logo" src="https://www.graduados-sociales.com/images/assets/logo-es100.svg" alt="Graduats Socials" width="280">
+  <header class="topbar">
+    <img class="logo" src="https://www.graduados-sociales.com/images/assets/logo-es100.svg" alt="Graduats Socials" width="280">
+    <div class="lang-toggle" id="langToggleWrap" data-lang="ca" aria-label="Idioma">
+      <span class="lang lang-ca">CA</span>
+      <label class="switch">
+        <input type="checkbox" id="langToggle" aria-label="Canviar idioma">
+        <span class="slider" aria-hidden="true"></span>
+      </label>
+      <span class="lang lang-es">ES</span>
+    </div>
+  </header>
   <h1 id="i18nH1">Eleccions ICGSB</h1>
   <p id="i18nDesc">Puja l'exportació Excel de vots. El PDF es genera al navegador en un entorn segur SSL <span class="lock-icon" aria-hidden="true">🔒</span> (sense cap còpia al servidor).</p>
 
@@ -362,12 +384,15 @@
     var btn = document.getElementById('btn');
     if (btn.textContent === i18n[lang === 'ca' ? 'es' : 'ca'].btnGenerating) btn.textContent = i18n[lang].btnGenerating;
     else btn.textContent = i18n[lang].btnGenerate;
-    document.getElementById('langCa').classList.toggle('active', lang === 'ca');
-    document.getElementById('langEs').classList.toggle('active', lang === 'es');
+    var toggle = document.getElementById('langToggle');
+    var wrap = document.getElementById('langToggleWrap');
+    if (toggle) toggle.checked = (lang === 'es');
+    if (wrap) wrap.setAttribute('data-lang', lang);
   }
 
-  document.getElementById('langCa').addEventListener('click', function() { applyLang('ca'); });
-  document.getElementById('langEs').addEventListener('click', function() { applyLang('es'); });
+  document.getElementById('langToggle').addEventListener('change', function(e) {
+    applyLang(e.target.checked ? 'es' : 'ca');
+  });
   applyLang(currentLang);
 
   function showMessage(text, isError) {
