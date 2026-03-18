@@ -15,6 +15,7 @@
       margin: 2rem auto;
       padding: 0 1rem;
       color: #1a1a1a;
+      position: relative;
     }
     h1 { font-size: 1.35rem; margin-bottom: 0.5rem; }
     p { color: #555; font-size: 0.95rem; margin-bottom: 1.5rem; }
@@ -49,16 +50,25 @@
     .page-footer .ambia-logo { display: block; margin: 0 auto 0.5rem; height: 40px; width: auto; }
     .page-footer .dev-by { font-size: 0.85rem; color: #666; margin-bottom: 0.25rem; }
     .page-footer .copyright { font-size: 0.75rem; color: #888; }
+    .page-footer a { text-decoration: none; color: inherit; }
+    .lang-switch { position: absolute; top: 1rem; right: 1rem; font-size: 0.9rem; }
+    .lang-switch button { background: none; border: none; cursor: pointer; padding: 0.2rem 0.4rem; color: #666; font-size: inherit; }
+    .lang-switch button:hover { color: var(--color-primary); text-decoration: underline; }
+    .lang-switch button.active { font-weight: 700; color: var(--color-primary); }
+    .lang-switch span { color: #999; margin: 0 0.15rem; }
   </style>
 </head>
 <body>
+  <div class="lang-switch" role="navigation" aria-label="Idioma">
+    <button type="button" id="langCa" data-lang="ca">CA</button><span>|</span><button type="button" id="langEs" data-lang="es">ES</button>
+  </div>
   <img class="logo" src="https://www.graduados-sociales.com/images/assets/logo-es100.svg" alt="Graduats Socials" width="280">
-  <h1>Eleccions ICGSB</h1>
-  <p>Puja l'exportació Excel de vots. El PDF es genera al navegador en un entorn segur SSL <span class="lock-icon" aria-hidden="true">🔒</span> (sense cap còpia al servidor).</p>
+  <h1 id="i18nH1">Eleccions ICGSB</h1>
+  <p id="i18nDesc">Puja l'exportació Excel de vots. El PDF es genera al navegador en un entorn segur SSL <span class="lock-icon" aria-hidden="true">🔒</span> (sense cap còpia al servidor).</p>
 
   <form id="form" enctype="multipart/form-data">
     <div class="form-group">
-      <label for="excel">Fitxer Excel (.xlsx)</label>
+      <label for="excel" id="i18nLabel">Fitxer Excel (.xlsx)</label>
       <input type="file" id="excel" name="excel" accept=".xlsx" required>
     </div>
     <div class="form-group">
@@ -75,9 +85,9 @@
   </div>
 
   <footer class="page-footer">
-    <img class="ambia-logo" src="https://www.ambia.es/ambia_logo_petit.jpg" alt="ambia">
-    <p class="dev-by">Desenvolupat per ambia</p>
-    <p class="copyright">© 2025 ambia. Tots els drets reservats.</p>
+    <a href="https://www.ambia.es" target="_blank" rel="noopener" title="Visitar ambia.es"><img class="ambia-logo" src="https://www.ambia.es/ambia_logo_petit.jpg" alt="ambia"></a>
+    <p class="dev-by" id="i18nDevBy">Desenvolupat per ambia</p>
+    <p class="copyright" id="i18nCopyright">© 2025 ambia. Tots els drets reservats.</p>
   </footer>
 
   <script>
@@ -308,6 +318,58 @@
   const progressBar = document.getElementById('progressBar');
   const progressPct = document.getElementById('progressPct');
 
+  var i18n = {
+    ca: {
+      title: 'Eleccions ICGSB – Generador de paperetes',
+      h1: 'Eleccions ICGSB',
+      desc: 'Puja l\'exportació Excel de vots. El PDF es genera al navegador en un entorn segur SSL \uD83D\uDD12 (sense cap còpia al servidor).',
+      labelFile: 'Fitxer Excel (.xlsx)',
+      btnGenerate: 'Generar PDF',
+      btnGenerating: 'Generant...',
+      devBy: 'Desenvolupat per ambia',
+      copyright: '\u00A9 2025 ambia. Tots els drets reservats.',
+      msgNoData: 'No s\'han trobat dades valides a l\'Excel.',
+      msgError: 'Error: ',
+      msgSuccess: function(n) { return 'PDF generat correctament (' + n + ' paperetes).'; }
+    },
+    es: {
+      title: 'Elecciones ICGSB – Generador de papeletas',
+      h1: 'Elecciones ICGSB',
+      desc: 'Sube la exportación Excel de votos. El PDF se genera en el navegador en un entorno seguro SSL \uD83D\uDD12 (sin ninguna copia en el servidor).',
+      labelFile: 'Archivo Excel (.xlsx)',
+      btnGenerate: 'Generar PDF',
+      btnGenerating: 'Generando...',
+      devBy: 'Desarrollado por ambia',
+      copyright: '\u00A9 2025 ambia. Todos los derechos reservados.',
+      msgNoData: 'No se han encontrado datos válidos en el Excel.',
+      msgError: 'Error: ',
+      msgSuccess: function(n) { return 'PDF generado correctamente (' + n + ' papeletas).'; }
+    }
+  };
+
+  var currentLang = localStorage.getItem('icgsb-lang') || 'ca';
+
+  function applyLang(lang) {
+    currentLang = lang;
+    localStorage.setItem('icgsb-lang', lang);
+    document.documentElement.lang = lang === 'ca' ? 'ca' : 'es';
+    document.title = i18n[lang].title;
+    document.getElementById('i18nH1').textContent = i18n[lang].h1;
+    document.getElementById('i18nDesc').textContent = i18n[lang].desc;
+    document.getElementById('i18nLabel').textContent = i18n[lang].labelFile;
+    document.getElementById('i18nDevBy').textContent = i18n[lang].devBy;
+    document.getElementById('i18nCopyright').textContent = i18n[lang].copyright;
+    var btn = document.getElementById('btn');
+    if (btn.textContent === i18n[lang === 'ca' ? 'es' : 'ca'].btnGenerating) btn.textContent = i18n[lang].btnGenerating;
+    else btn.textContent = i18n[lang].btnGenerate;
+    document.getElementById('langCa').classList.toggle('active', lang === 'ca');
+    document.getElementById('langEs').classList.toggle('active', lang === 'es');
+  }
+
+  document.getElementById('langCa').addEventListener('click', function() { applyLang('ca'); });
+  document.getElementById('langEs').addEventListener('click', function() { applyLang('es'); });
+  applyLang(currentLang);
+
   function showMessage(text, isError) {
     message.textContent = text;
     message.className = isError ? 'error' : 'success';
@@ -340,13 +402,13 @@
       if (pct < 100) requestAnimationFrame(frame);
       else {
         progressWrap.classList.add('hidden');
-        btn.textContent = 'Generant...';
+        btn.textContent = i18n[currentLang].btnGenerating;
         (async function() {
           try {
             const ab = await file.arrayBuffer();
             const ballots = parseExcel(ab);
             if (!ballots || ballots.length === 0) {
-              showMessage('No s\'han trobat dades valides a l\'Excel.', true);
+              showMessage(i18n[currentLang].msgNoData, true);
               return;
             }
             const blob = await generatePDF(ballots, file.name, ab);
@@ -356,12 +418,12 @@
             a.download = 'paperetes_icgsb.pdf';
             a.click();
             URL.revokeObjectURL(url);
-            showMessage('PDF generat correctament (' + ballots.length + ' paperetes).', false);
+            showMessage(i18n[currentLang].msgSuccess(ballots.length), false);
           } catch (err) {
-            showMessage('Error: ' + err.message, true);
+            showMessage(i18n[currentLang].msgError + err.message, true);
           } finally {
             btn.disabled = false;
-            btn.textContent = 'Generar PDF';
+            btn.textContent = i18n[currentLang].btnGenerate;
           }
         })();
       }
