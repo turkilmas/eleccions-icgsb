@@ -241,6 +241,42 @@
     const INNER = 3;
     const SLOT = COLS * ROWS;
     const MARGIN_TOP = HEADER_H + MARGIN;
+    const maxLogoW = CARD_W - 2 * INNER - 8;
+    const maxLogoH = 12;
+    var logoDims = { data: null, w: 0, h: 0 };
+    try {
+      var lr = await fetch('icgsb_logo.png');
+      if (lr.ok) {
+        var blob = await lr.blob();
+        logoDims.data = await new Promise(function(resolve, reject) {
+          var fr = new FileReader();
+          fr.onload = function() { resolve(fr.result); };
+          fr.onerror = reject;
+          fr.readAsDataURL(blob);
+        });
+        await new Promise(function(resolve) {
+          var im = new Image();
+          im.onload = function() {
+            var iw = im.naturalWidth;
+            var ih = im.naturalHeight;
+            if (iw > 0 && ih > 0) {
+              var asp = ih / iw;
+              var lw = maxLogoW;
+              var lh = lw * asp;
+              if (lh > maxLogoH) {
+                lh = maxLogoH;
+                lw = lh / asp;
+              }
+              logoDims.w = lw;
+              logoDims.h = lh;
+            }
+            resolve();
+          };
+          im.onerror = function() { resolve(); };
+          im.src = logoDims.data;
+        });
+      }
+    } catch (e) { /* sense logo */ }
 
     let posInPage = 0;
     let lastIdAgenda = null;
@@ -306,10 +342,16 @@
         y += 5;
       } else {
         for (var vi = 0; vi < b.votes.length; vi++) {
-          if (y > by + bh - 18) break;
+          if (y > by + bh - 28) break;
           doc.text('- ' + b.votes[vi], bx + 8, y);
           y += 3.5;
         }
+      }
+
+      if (logoDims.data && logoDims.w > 0) {
+        var logoY = by + bh - 8 - logoDims.h;
+        if (logoY < by + 4) logoY = by + 4;
+        doc.addImage(logoDims.data, 'PNG', bx + 4, logoY, logoDims.w, logoDims.h);
       }
 
       doc.setFontSize(7);

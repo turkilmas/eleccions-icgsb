@@ -8,6 +8,7 @@ from typing import Optional, Union
 import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
 
@@ -265,6 +266,11 @@ def crear_pdf_papeletes(
     id_agenda_anterior = None
     num_pagina = 1
 
+    logo_path = Path(__file__).resolve().parent / "icgsb_logo.png"
+    logo_reader: Optional[ImageReader] = None
+    if logo_path.is_file():
+        logo_reader = ImageReader(str(logo_path))
+
     for (
         id_agenda,
         nom_agenda,
@@ -351,10 +357,31 @@ def crear_pdf_papeletes(
             y -= 10
         else:
             for vot in vots_unics:
-                if y < by + 10 * mm:
-                    break  # evitem escriure fora de la targeta
+                if y < by + 22 * mm:
+                    break  # espai per logo ICGSB + peu de papereta
                 c.drawString(bx + 8 * mm, y, f"- {vot}")
                 y -= 9
+
+        # Logo ICGSB (centre-baix de la targeta, alineat a l'esquerra, sobre el peu)
+        if logo_reader is not None:
+            iw, ih = logo_reader.getSize()
+            aspect = ih / float(iw) if iw else 1.0
+            max_logo_w = bw - 8 * mm
+            max_logo_h = 11 * mm
+            logo_w = float(max_logo_w)
+            logo_h = logo_w * aspect
+            if logo_h > max_logo_h:
+                logo_h = float(max_logo_h)
+                logo_w = logo_h / aspect
+            y_logo = by + 8 * mm
+            c.drawImage(
+                logo_reader,
+                bx + 4 * mm,
+                y_logo,
+                width=logo_w,
+                height=logo_h,
+                mask="auto",
+            )
 
         # Peu de papereta (dues línies: id agenda + papeleta, després línies Excel)
         c.setFont("Helvetica-Oblique", 7)
