@@ -257,6 +257,7 @@ def crear_pdf_papeletes(
     )
     total_pagines = _comptar_pagines(papeletes)
     data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    data_avui_papereta = datetime.now().strftime("%d/%m/%Y")
     nom_fitxer = nom_fitxer or "—"
     hash_fitxer = hash_fitxer or "—"
 
@@ -318,6 +319,8 @@ def crear_pdf_papeletes(
         top_y = by + bh - 6 * mm
         c.setFont("Helvetica-Bold", 10)
         c.drawString(bx + 4 * mm, top_y, "ELECCIONS ICGSB")
+        c.setFont("Helvetica-Bold", 8)
+        c.drawRightString(bx + bw - 4 * mm, top_y, data_avui_papereta)
         c.setFont("Helvetica-Bold", 9)
         c.drawString(bx + 4 * mm, top_y - 11, "VOT ELECTRÒNIC")
 

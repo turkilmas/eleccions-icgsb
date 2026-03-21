@@ -229,6 +229,7 @@
     const fileHash = await sha256Hex(arrayBuffer);
     const genDate = new Date();
     const dateStr = genDate.toLocaleString('ca-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const dataPapereta = genDate.toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const A4_W = 210;
@@ -280,6 +281,8 @@
       doc.setFontSize(10);
       doc.setFont(undefined, 'bold');
       doc.text('ELECCIONS ICGSB', bx + 4, topY);
+      doc.setFontSize(8);
+      doc.text(dataPapereta, bx + bw - 4, topY, { align: 'right' });
       doc.setFontSize(9);
       doc.text('VOT ELECTRÒNIC', bx + 4, topY + 5);
 
