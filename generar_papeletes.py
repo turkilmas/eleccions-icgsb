@@ -12,6 +12,30 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
 
+# Color de fons de la papereta (paper reciclat), igual que setFillColorRGB(0.96, 0.94, 0.88)
+_PAPERETA_RGB: tuple[int, int, int] = (245, 240, 224)
+
+
+def _logo_image_reader_papereta(logo_path: Path) -> Optional[ImageReader]:
+    """
+    Composa el PNG (RGBA) sobre el color de la papereta perquè el PDF no mostri
+    caixa blanca quan ReportLab no aplica bé l'alfa.
+    """
+    if not logo_path.is_file():
+        return None
+    try:
+        from PIL import Image as PILImage
+    except ImportError:
+        return ImageReader(str(logo_path))
+    im = PILImage.open(logo_path).convert("RGBA")
+    paper = PILImage.new("RGBA", im.size, (*_PAPERETA_RGB, 255))
+    composited = PILImage.alpha_composite(paper, im)
+    buf = io.BytesIO()
+    composited.convert("RGB").save(buf, format="PNG")
+    buf.seek(0)
+    return ImageReader(buf)
+
+
 def _normalitzar(s: str) -> str:
     """Majúscules, sense espais ni accents, per comparar noms de columna."""
     s = str(s).upper().replace(" ", "").replace("_", "")
@@ -267,9 +291,7 @@ def crear_pdf_papeletes(
     num_pagina = 1
 
     logo_path = Path(__file__).resolve().parent / "icgsb_logo.png"
-    logo_reader: Optional[ImageReader] = None
-    if logo_path.is_file():
-        logo_reader = ImageReader(str(logo_path))
+    logo_reader = _logo_image_reader_papereta(logo_path)
 
     for (
         id_agenda,
@@ -357,23 +379,24 @@ def crear_pdf_papeletes(
             y -= 10
         else:
             for vot in vots_unics:
-                if y < by + 22 * mm:
-                    break  # espai per logo ICGSB + peu de papereta
+                if y < by + 16 * mm:
+                    break  # espai per logo ICGSB (baix) + peu de papereta
                 c.drawString(bx + 8 * mm, y, f"- {vot}")
                 y -= 9
 
-        # Logo ICGSB (centre-baix de la targeta, alineat a la dreta, sobre el peu)
+        # Logo ICGSB (baix a la dreta, a l'alçada del peu «Línies Excel», sobre el fons paper)
         if logo_reader is not None:
             iw, ih = logo_reader.getSize()
             aspect = ih / float(iw) if iw else 1.0
             max_logo_w = bw - 8 * mm
-            max_logo_h = 11 * mm
+            max_logo_h = 10 * mm
             logo_w = float(max_logo_w)
             logo_h = logo_w * aspect
             if logo_h > max_logo_h:
                 logo_h = float(max_logo_h)
                 logo_w = logo_h / aspect
-            y_logo = by + 8 * mm
+            # Vora inferior de la imatge ~alineada amb la línia «Línies Excel» (by + 2 mm)
+            y_logo = by + 2 * mm
             x_logo = bx + bw - 4 * mm - logo_w
             c.drawImage(
                 logo_reader,
@@ -381,7 +404,6 @@ def crear_pdf_papeletes(
                 y_logo,
                 width=logo_w,
                 height=logo_h,
-                mask="auto",
             )
 
         # Peu de papereta (dues línies: id agenda + papeleta, després línies Excel)

@@ -245,18 +245,39 @@
     const SLOT = COLS * ROWS;
     const MARGIN_TOP = HEADER_H + MARGIN;
     const maxLogoW = CARD_W - 2 * INNER - 8;
-    const maxLogoH = 12;
+    const maxLogoH = 10;
+    const PAPER_R = 245, PAPER_G = 240, PAPER_B = 224;
+    function flattenLogoOnPaper(dataUrl) {
+      return new Promise(function(resolve) {
+        var im = new Image();
+        im.onload = function() {
+          var w = im.naturalWidth, h = im.naturalHeight;
+          if (!w || !h) { resolve(dataUrl); return; }
+          var cnv = document.createElement('canvas');
+          cnv.width = w;
+          cnv.height = h;
+          var ctx = cnv.getContext('2d');
+          ctx.fillStyle = 'rgb(' + PAPER_R + ',' + PAPER_G + ',' + PAPER_B + ')';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(im, 0, 0);
+          try { resolve(cnv.toDataURL('image/png')); } catch (err) { resolve(dataUrl); }
+        };
+        im.onerror = function() { resolve(dataUrl); };
+        im.src = dataUrl;
+      });
+    }
     var logoDims = { data: null, w: 0, h: 0 };
     try {
       var lr = await fetch('icgsb_logo.png');
       if (lr.ok) {
         var blob = await lr.blob();
-        logoDims.data = await new Promise(function(resolve, reject) {
+        var rawData = await new Promise(function(resolve, reject) {
           var fr = new FileReader();
           fr.onload = function() { resolve(fr.result); };
           fr.onerror = reject;
           fr.readAsDataURL(blob);
         });
+        logoDims.data = await flattenLogoOnPaper(rawData);
         await new Promise(function(resolve) {
           var im = new Image();
           im.onload = function() {
@@ -345,14 +366,15 @@
         y += 5;
       } else {
         for (var vi = 0; vi < b.votes.length; vi++) {
-          if (y > by + bh - 28) break;
+          if (y > by + bh - 18) break;
           doc.text('- ' + b.votes[vi], bx + 8, y);
           y += 3.5;
         }
       }
 
       if (logoDims.data && logoDims.w > 0) {
-        var logoY = by + bh - 8 - logoDims.h;
+        var logoBottomPad = 2;
+        var logoY = by + bh - logoBottomPad - logoDims.h;
         if (logoY < by + 4) logoY = by + 4;
         doc.addImage(logoDims.data, 'PNG', bx + bw - 4 - logoDims.w, logoY, logoDims.w, logoDims.h);
       }
