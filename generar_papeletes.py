@@ -362,7 +362,7 @@ def crear_pdf_papeletes(
                 c.drawString(bx + 8 * mm, y, f"- {vot}")
                 y -= 9
 
-        # Logo ICGSB (centre-baix de la targeta, alineat a l'esquerra, sobre el peu)
+        # Logo ICGSB (centre-baix de la targeta, alineat a la dreta, sobre el peu)
         if logo_reader is not None:
             iw, ih = logo_reader.getSize()
             aspect = ih / float(iw) if iw else 1.0
@@ -374,9 +374,10 @@ def crear_pdf_papeletes(
                 logo_h = float(max_logo_h)
                 logo_w = logo_h / aspect
             y_logo = by + 8 * mm
+            x_logo = bx + bw - 4 * mm - logo_w
             c.drawImage(
                 logo_reader,
-                bx + 4 * mm,
+                x_logo,
                 y_logo,
                 width=logo_w,
                 height=logo_h,

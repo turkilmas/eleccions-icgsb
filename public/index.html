@@ -354,7 +354,7 @@
       if (logoDims.data && logoDims.w > 0) {
         var logoY = by + bh - 8 - logoDims.h;
         if (logoY < by + 4) logoY = by + 4;
-        doc.addImage(logoDims.data, 'PNG', bx + 4, logoY, logoDims.w, logoDims.h);
+        doc.addImage(logoDims.data, 'PNG', bx + bw - 4 - logoDims.w, logoY, logoDims.w, logoDims.h);
       }
 
       doc.setFontSize(7);
